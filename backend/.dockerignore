@@ -1,0 +1,10 @@
+node_modules
+dist
+src/generated
+.env
+.env.local
+npm-debug.log*
+coverage
+*.md
+.git
+.gitignore
