@@ -60,7 +60,7 @@ jobs:
           PROD_USER: ${{ secrets.PROD_USER }}
         run: |
           rsync -avz --delete \
-            -e "ssh -p ${PROD_PORT} -o StrictHostKeyChecking=no" \
+            -e "ssh -p ${PROD_PORT}" \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='backend/node_modules' \
@@ -75,7 +75,7 @@ jobs:
           PROD_PORT: ${{ secrets.PROD_PORT }}
           PROD_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -p "${PROD_PORT}" -o StrictHostKeyChecking=no \
+          ssh -p "${PROD_PORT}" \
             "${PROD_USER}@${PROD_HOST}" \
             'cd /var/www/conecthus && docker compose pull && docker compose up -d --build'
 
@@ -85,7 +85,7 @@ jobs:
           PROD_PORT: ${{ secrets.PROD_PORT }}
           PROD_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -p "${PROD_PORT}" -o StrictHostKeyChecking=no \
+          ssh -p "${PROD_PORT}" \
             "${PROD_USER}@${PROD_HOST}" \
             'cd /var/www/conecthus && docker compose ps'
 
