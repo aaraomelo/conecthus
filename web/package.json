@@ -13,10 +13,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.12.0",
     "axios": "^1.20.0",
     "mqtt": "^5.16.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
