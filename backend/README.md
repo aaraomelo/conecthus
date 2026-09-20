@@ -101,6 +101,13 @@ Swagger docs: http://localhost:3000/api/docs
 
 All endpoints except `auth/*` require `Authorization: Bearer <token>`.
 
+## Busca
+
+> A listagem de tarefas busca por `search` via Prisma `contains` + `mode: 'insensitive'`
+> (`ILIKE '%termo%'` sobre `title`/`description`), com parâmetros vinculados, `userId`
+> obrigatório, filtros por `status`/`dueDate`, paginação e cache Redis. `pg_trgm` **não
+> é usado**; a decisão está registrada em `../README.md` (seção `Busca textual`).
+
 ## Docker
 
 ```bash

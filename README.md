@@ -48,6 +48,36 @@ Full-stack task management application built for the **AV_DEV_SENIOR** challenge
 > filtros, `FlatList` e `NotificationOverlay`; mutações disparam
 > `TASKS_CHANGED_EVENT` (DeviceEventEmitter) que recarrega a lista.
 
+## Busca textual
+
+> **Decisão (busca textual):** a listagem de tarefas busca por `search` via Prisma
+> `contains` + `mode: 'insensitive'`, o que gera `ILIKE ('%' || $termo || '%')` sobre
+> `title` e `description`, sempre com valores como parâmetros vinculados. A consulta
+> mantém `userId` obrigatório (isolamento por usuário), filtros por `status`/`dueDate`,
+> paginação e cache Redis. `pg_trgm` foi investigado experimentalmente, avaliando GIN/GiST,
+> `similarity`, `word_similarity`, acentuação e planos de execução. A decisão é **não
+> adotar `pg_trgm` neste estágio**: o volume atual não justifica a complexidade adicional.
+> A extensão permanece como possibilidade futura caso escala ou qualidade da busca
+> passem a exigir.
+
+| Estratégia                  | Situação    | Motivo                                                     |
+| --------------------------- | ----------- | ---------------------------------------------------------- |
+| Prisma `contains` / ILIKE   | Atual       | Simples e suficiente para o volume atual                   |
+| pg_trgm + GIN               | Futuro      | Considerar se a escala tornar o Seq Scan relevante         |
+| pg_trgm + similarity        | Futuro      | Considerar se houver necessidade de typo/ranking           |
+| pgvector                    | Não adotado | Sem necessidade de busca semântica neste estágio           |
+
+> **Escopo das tecnologias de busca:** `ILIKE` → substring/case-insensitive;
+> `pg_trgm` → similaridade textual/fuzzy matching — **não é busca semântica**;
+> `pgvector` → embeddings/busca semântica.
+
+> **Aprendizado técnico:** `pg_trgm` foi avaliado fora de produção, incluindo testes com
+> PostgreSQL real e comparação de planos de execução. Os resultados indicaram potencial
+> de ganho em volumes maiores (em um experimento sintético com 100k registros o índice
+> GIN reduziu o plano observado de ~83 ms para ~22 ms — valores apenas indicativos, não
+> um benchmark de produção), mas não justificaram a complexidade adicional para o cenário
+> atual.
+
 ## Requirements coverage
 
 | Requirement                | Where                                                                                                       |           |
