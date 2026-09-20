@@ -1,0 +1,117 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: ./web
+        run: npm ci
+
+      - name: Build backend
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Build frontend
+        working-directory: ./web
+        run: npm run build
+
+      - name: Validate Docker Compose config
+        run: docker compose config --quiet
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: SCP files to production
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p ${PROD_PORT} -o StrictHostKeyChecking=no" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='backend/node_modules' \
+            --exclude='web/node_modules' \
+            --exclude='backend/dist' \
+            --exclude='web/dist' \
+            ./ "${PROD_USER}@${PROD_HOST}:/var/www/conecthus/"
+
+      - name: Deploy with Docker Compose
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -p "${PROD_PORT}" -o StrictHostKeyChecking=no \
+            "${PROD_USER}@${PROD_HOST}" \
+            'cd /var/www/conecthus && docker compose pull && docker compose up -d --build'
+
+      - name: Wait for services
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -p "${PROD_PORT}" -o StrictHostKeyChecking=no \
+            "${PROD_USER}@${PROD_HOST}" \
+            'cd /var/www/conecthus && docker compose ps'
+
+      - name: Health check — backend API docs
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" \
+              "http://${PROD_HOST}:3005/api/docs" 2>/dev/null || echo "000")
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Backend health check failed"
+          exit 1
+
+      - name: Smoke test — frontend HTTP 200
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" \
+              "https://conecthus.patriatechnology.com/" 2>/dev/null || echo "000")
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Frontend smoke test failed"
+          exit 1
