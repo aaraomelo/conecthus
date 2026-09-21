@@ -1,12 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { createTask, getTask, updateTask } from '../api/tasks'
 import { getErrorMessage } from '../api/client'
 import { TASKS_CHANGED_EVENT } from '../mqtt/useNotifications'
 import { createTaskSchema, type CreateTaskValues } from '../features/tasks/taskFormSchema'
-import type { TaskStatus } from '../types'
 
 export function TaskFormPage() {
   const { id } = useParams()
@@ -15,7 +15,6 @@ export function TaskFormPage() {
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(isEdit)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const {
@@ -23,7 +22,7 @@ export function TaskFormPage() {
     handleSubmit,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<CreateTaskValues>({
+  } = useForm<z.input<typeof createTaskSchema>, any, CreateTaskValues>({
     resolver: zodResolver(createTaskSchema),
     defaultValues: { title: '', description: '', status: 'TODO', dueDate: '' },
     mode: 'onTouched',
@@ -54,7 +53,6 @@ export function TaskFormPage() {
 
   const onSubmit = async (data: CreateTaskValues) => {
     setError(null)
-    setSaving(true)
     try {
       const input = {
         title: data.title.trim(),
@@ -67,8 +65,6 @@ export function TaskFormPage() {
       navigate(isEdit && taskId ? `/tasks/${taskId}` : '/tasks', { replace: true })
     } catch (err) {
       setError(getErrorMessage(err))
-    } finally {
-      setSaving(false)
     }
   }
 

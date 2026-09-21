@@ -3,9 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
-import { getErrorMessage } from '../api/client'
-import { loginSchema, type LoginValues } from '../features/auth/loginSchema'
 import { getAuthError } from '../api/client'
+import { loginSchema, type LoginValues } from '../features/auth/loginSchema'
 
 export function LoginPage() {
   const { login } = useAuth()

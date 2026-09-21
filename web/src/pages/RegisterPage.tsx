@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
 import { getErrorMessage } from '../api/client'
-import { registerSchema, type RegisterValues } from '../features/auth/registerSchema'
+import { registerSchema } from '../features/auth/registerSchema'
 
 interface RegisterFormValues {
   name: string

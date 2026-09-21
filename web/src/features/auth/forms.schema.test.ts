@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { loginSchema, type LoginValues } from './loginSchema'
-import { registerSchema, type RegisterValues } from './registerSchema'
-import { taskFormSchema, type CreateTaskValues } from '../tasks/taskFormSchema'
-import { taskQuerySchema, type TaskQueryValues } from '../tasks/taskQuerySchema'
+import { loginSchema } from './loginSchema'
+import { registerSchema } from './registerSchema'
+import { taskFormSchema } from '../tasks/taskFormSchema'
+import { taskQuerySchema } from '../tasks/taskQuerySchema'
 
 describe('loginSchema', () => {
   it('accepts valid email and password', () => {
