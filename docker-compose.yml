@@ -30,7 +30,7 @@ services:
       retries: 10
 
   mqtt:
-    image: eclipse-mosquitto:2
+    image: eclipse-mosquitto:2.0.18
     container_name: conecthus-mqtt
     ports:
       - "1883:1883"
