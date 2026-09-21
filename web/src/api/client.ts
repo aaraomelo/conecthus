@@ -29,6 +29,16 @@ api.interceptors.response.use(
   },
 )
 
+export function getAuthError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { message?: string | string[] } | undefined
+    if (Array.isArray(data?.message)) return data.message.join(', ')
+    if (data?.message) return data.message
+    if (error.message) return error.message
+  }
+  return 'Algo deu errado. Tente novamente.'
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as { message?: string | string[] } | undefined

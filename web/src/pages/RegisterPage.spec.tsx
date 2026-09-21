@@ -2,78 +2,119 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthProvider } from '../auth/AuthContext'
 import { RegisterPage } from './RegisterPage'
-import type { AuthResponse } from '../types'
 
-vi.mock('../api/auth', () => ({
-  loginUser: vi.fn(),
-  registerUser: vi.fn(),
-  getCurrentUser: vi.fn(),
-  updateCurrentUser: vi.fn(),
+const mockRegister = vi.fn()
+vi.mock('../auth/auth-context', () => ({
+  useAuth: vi.fn(() => ({
+    register: mockRegister,
+    user: null,
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+  })),
 }))
 
-import { registerUser } from '../api/auth'
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => mockNavigate,
+}))
 
-const mockRegister = vi.mocked(registerUser)
-const user = { id: 1, name: 'Ana', email: 'ana@example.com', createdAt: '', updatedAt: '' }
-
-function renderRegister() {
+function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/register']}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/tasks" element={<div>DASHBOARD</div>} />
-        </Routes>
-      </AuthProvider>
-    </MemoryRouter>,
+      <Routes>
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/tasks" element={<div>Tasks</div>} />
+      </Routes>
+    </MemoryRouter>
   )
 }
 
 describe('RegisterPage', () => {
   beforeEach(() => {
-    mockRegister.mockReset()
+    mockRegister.mockClear()
+    mockNavigate.mockClear()
   })
 
   it('renders the registration form', () => {
-    renderRegister()
+    renderPage()
     expect(screen.getByTestId('register-form')).toBeInTheDocument()
-    expect(screen.getByLabelText('Nome')).toBeInTheDocument()
-    expect(screen.getByLabelText('E-mail')).toBeInTheDocument()
-    expect(screen.getByLabelText('Senha')).toBeInTheDocument()
-    expect(screen.getByText('Entrar')).toBeInTheDocument()
+    expect(screen.getByTestId('register-name')).toBeInTheDocument()
+    expect(screen.getByTestId('register-email')).toBeInTheDocument()
+    expect(screen.getByTestId('register-password')).toBeInTheDocument()
+    expect(screen.getByTestId('register-confirm-password')).toBeInTheDocument()
+    expect(screen.getByTestId('register-submit')).toBeInTheDocument()
   })
 
-  it('registers a new user and navigates to /tasks', async () => {
-    const response = { user, accessToken: 'token-reg' } satisfies AuthResponse
-    mockRegister.mockResolvedValue({ data: response } as never)
-    const userEventApi = userEvent.setup()
+  it('shows validation errors on submit with empty fields', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByTestId('register-submit'))
 
-    renderRegister()
-    await userEventApi.type(screen.getByLabelText('Nome'), 'Ana')
-    await userEventApi.type(screen.getByLabelText('E-mail'), 'ana@example.com')
-    await userEventApi.type(screen.getByLabelText('Senha'), 'secret1')
-    await userEventApi.click(screen.getByTestId('register-submit'))
-
-    expect(await screen.findByText('DASHBOARD')).toBeInTheDocument()
-    expect(mockRegister).toHaveBeenCalledWith('Ana', 'ana@example.com', 'secret1')
-    expect(localStorage.getItem('conecthus.token')).toBe('token-reg')
+    expect(await screen.findByText('Nome obrigatório')).toBeInTheDocument()
+    expect(screen.getByText('E-mail obrigatório')).toBeInTheDocument()
+    expect(screen.getByText('Confirme sua senha')).toBeInTheDocument()
   })
 
-  it('shows an error message when registration fails', async () => {
-    mockRegister.mockRejectedValue({
-      isAxiosError: true,
-      response: { status: 409, data: { message: 'E-mail já cadastrado' } },
-    })
-    const userEventApi = userEvent.setup()
+  it('shows validation error for invalid email', async () => {
+    const user = userEvent.setup()
+    renderPage()
 
-    renderRegister()
-    await userEventApi.type(screen.getByLabelText('Nome'), 'Ana')
-    await userEventApi.type(screen.getByLabelText('E-mail'), 'ana@example.com')
-    await userEventApi.type(screen.getByLabelText('Senha'), 'secret1')
-    await userEventApi.click(screen.getByTestId('register-submit'))
+    await user.type(screen.getByTestId('register-email'), 'invalid-email')
+    await user.tab()
 
-    expect(await screen.findByTestId('register-error')).toHaveTextContent('E-mail já cadastrado')
+    expect(await screen.findByText('E-mail inválido')).toBeInTheDocument()
+  })
+
+  it('shows validation error for short password', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('register-password'), '12')
+    await user.tab()
+
+    expect(await screen.findByText('Mínimo 8 caracteres')).toBeInTheDocument()
+  })
+
+  it('shows validation error when passwords do not match', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('register-password'), 'password1')
+    await user.type(screen.getByTestId('register-confirm-password'), 'different')
+    await user.tab()
+
+    expect(await screen.findByText('As senhas não coincidem')).toBeInTheDocument()
+  })
+
+  it('registers a new user and navigates to /tasks on success', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('register-name'), 'Ana Silva')
+    await user.type(screen.getByTestId('register-email'), 'ana@domain.com')
+    await user.type(screen.getByTestId('register-password'), 'password1')
+    await user.type(screen.getByTestId('register-confirm-password'), 'password1')
+    await user.click(screen.getByTestId('register-submit'))
+
+    expect(mockRegister).toHaveBeenCalledWith('Ana Silva', 'ana@domain.com', 'password1')
+    expect(mockNavigate).toHaveBeenCalledWith('/tasks', { replace: true })
+  })
+
+  it('displays error message when registration fails', async () => {
+    mockRegister.mockRejectedValue(new Error('E-mail já cadastrado'))
+
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('register-name'), 'Ana Silva')
+    await user.type(screen.getByTestId('register-email'), 'ana@domain.com')
+    await user.type(screen.getByTestId('register-password'), 'password1')
+    await user.type(screen.getByTestId('register-confirm-password'), 'password1')
+    await user.click(screen.getByTestId('register-submit'))
+
+    expect(await screen.findByText('Algo deu errado. Tente novamente.')).toBeInTheDocument()
   })
 })

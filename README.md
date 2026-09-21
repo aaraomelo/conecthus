@@ -11,6 +11,19 @@ Full-stack task management application built for the **AV_DEV_SENIOR** challenge
 
 ...
 
+## Demo
+
+Aplicação Web publicada: https://conecthus.patriatechnology.com
+
+* **Web:** SPA pública; cadastro e login são auto-atendidos (crie uma conta na primeira visita).
+* **Backend:** API REST + Swagger em `/api/docs` quando rodando via Docker Compose.
+* **Mobile:** roda separadamente via Expo Go (SDK 57) apontando para o backend.
+
+> Validação 2026-09-21: a Web, o Swagger (`/api/docs`) e a API (`/api/*`) respondem
+> no domínio público (**HTTP 200**; `/api/tasks` sem token retorna **401**). A
+> validação completa também pode ser feita localmente via Docker Compose. Não há
+> credenciais de demonstração públicas.
+
 ## Architecture decisions
 
 > **Authentication (JWT):** the API is stateless. Tokens are verified by a global
@@ -78,18 +91,41 @@ Full-stack task management application built for the **AV_DEV_SENIOR** challenge
 > um benchmark de produção), mas não justificaram a complexidade adicional para o cenário
 > atual.
 
-## Requirements coverage
+## Requisitos do desafio
 
-| Requirement                | Where                                                                                                       |           |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- | --------- |
-| Register / login           | `backend/src/auth` + `web/src/pages/*` + `mobile/src/screens/Login*                                         | Register` |
-| Protected routes           | Global `JwtAuthGuard` + `@Public()`; `ProtectedRoute`/`GuestRoute` (web) + Stack condicional (mobile)       |           |
-| Task CRUD + filters        | `backend/src/tasks`; `web/src/pages/TasksPage` + `TaskFilters`; `mobile/src/screens/Tasks*` + `TaskFilters` |           |
-| Redis cache + invalidation | `CacheModule` + `TasksService`/`UsersService` key tracking/invalidation                                     |           |
-| MQTT notifications         | `MqttService.notify` → `notifications/{userId}`; `web/src/mqtt` + `mobile/src/mqtt` (overlay/toasts)        |           |
-| Redux Toolkit              | `web/src/app/store.ts` + `web/src/features/{auth,tasks,notifications}`                                      |           |
-| Swagger documentation      | `@nestjs/swagger` at `/api/docs`                                                                            |           |
-| Unit tests                 | Backend: 26. Web: 46. Mobile: 89 (jest-expo + RNTL, ≥ 70% coverage em todos)                                |           |
-| Integration tests          | `backend/test/app.e2e-spec.ts` (auth, CRUD, cache, MQTT, ownership)                                         |           |
-| Docker / Compose           | `Dockerfile`s + nginx + `docker-compose.yml`                                                                |           |
-| README / Git               | This file + clean commit history                                                                            |           |
+| Requisito                          | Implementação                                             | Local                                                                |
+| ---------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
+| Autenticação                       | JWT (cadastro/login), guard global + `@Public()`          | `backend/src/auth`; `web/src/auth`, `web/src/api/auth.ts`; `mobile/src/auth` |
+| Tarefas (criar/ver/editar/concluir/excluir) | REST + Prisma                                      | `backend/src/tasks`                                                   |
+| Filtros (status, data), busca textual e paginação | `TaskQueryDto` + `TasksService.findAll`      | `backend/src/tasks/dto/task-query.dto.ts`, `backend/src/tasks/tasks.service.ts` |
+| Isolamento por usuário              | `userId` obrigatório no `WHERE`                           | `TasksService` (coberto no e2e)                                       |
+| Cache Redis                         | Lista + perfil, TTL 60s, invalidação pós-mutação          | `CacheModule` (`app.module.ts`); `tasks.service.ts`, `users.service.ts` |
+| Notificações em tempo real (MQTT)   | Publicação em `notifications/{userId}`                    | `backend/src/mqtt/mqtt.service.ts`; `web/src/mqtt`, `mobile/src/mqtt` |
+| Web                                 | React 19 + Vite + TypeScript + Redux Toolkit, responsivo  | `web/` (`web/src/pages`, `web/src/features`)                          |
+| Mobile                              | Expo SDK 57 / React Native + AsyncStorage                  | `mobile/` (`mobile/src/screens`)                                     |
+| Validação                           | Backend: class-validator + `ValidationPipe`; Web: zod + react-hook-form | `backend/src/**/dto`, `backend/src/setup-app.ts`; `web/src/features/*Schema.ts` |
+| Banco de dados                      | PostgreSQL 16 + Prisma 7                                   | `backend/prisma` (schema + migrations)                                |
+| Documentação da API                 | Swagger em `GET /api/docs`                                | `backend/src/setup-app.ts`                                            |
+| Testes unitários                    | Backend 26, Web 77, Mobile 89; thresholds de cobertura 70% configurados para Web e Mobile (backend sem threshold) | `backend/src/**/*.spec.ts`; `web/src/**/*.spec.*`; `mobile/src/**/*.test.*` |
+| Testes de integração                | e2e: auth, CRUD, cache, MQTT, ownership — 12 casos        | `backend/test/app.e2e-spec.ts`                                        |
+| CI/CD e deploy                      | GitHub Actions (push p/ `main`): install, `prisma generate`, build backend/web, `docker compose config`, deploy SSH + `compose up` com healthchecks | `.github/workflows/deploy-production.yml`                             |
+| Docker / Compose                    | Postgres 16, Redis 7, Mosquitto 2, backend, nginx — healthchecks | `docker-compose.yml` + `backend/Dockerfile`, `web/Dockerfile`   |
+
+## Guia rápido de avaliação
+
+1. Suba tudo: `docker compose up --build -d`.
+2. Abra a Web em http://localhost:5173 (ou use a demo pública).
+3. Cadastre-se e faça login.
+4. Crie uma tarefa e verifique a notificação em tempo real.
+5. Edite, conclua e exclua a tarefa.
+6. Teste filtros (status/período), busca textual e paginação.
+7. Consulte o Swagger (compose: http://localhost:3005/api/docs; `npm run start:dev`: http://localhost:3000/api/docs).
+8. Rode os testes: backend `npm test` e `npm run test:e2e`; web `npm test`; mobile `npm test`.
+9. Revise `docker-compose.yml` (infra, portas, healthchecks).
+10. Mobile: `cd mobile && npm start` (Expo Go SDK 57) apontando para o backend.
+
+## Limitações conhecidas
+
+* Busca textual é `ILIKE` parcial — não tolera acentos/typos e não ordena por relevância (`pg_trgm` não adotado; ver [Busca textual](#busca-textual)).
+* A pipeline de CI builda e faz deploy, mas **não executa a suíte de testes** (validar localmente).
+* Backend não possui threshold de cobertura configurado (apenas Web e Mobile).

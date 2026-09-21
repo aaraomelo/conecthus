@@ -1,43 +1,41 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
 import { getErrorMessage } from '../api/client'
-
-interface LocationState {
-  from?: string
-}
+import { loginSchema, type LoginValues } from '../features/auth/loginSchema'
+import { getAuthError } from '../api/client'
 
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
-  const from = (location.state as LocationState | null)?.from ?? '/tasks'
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onTouched',
+  })
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    setError(null)
-    setSubmitting(true)
+  const onSubmit = async (data: LoginValues) => {
     try {
-      await login(email, password)
-      navigate(from, { replace: true })
+      await login(data.email, data.password)
+      navigate('/tasks', { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setSubmitting(false)
+      setError(getAuthError(err))
     }
   }
 
   return (
     <div className="auth-page">
-      <form className="card auth-card" onSubmit={handleSubmit} data-testid="login-form">
+      <form className="card auth-card" onSubmit={handleSubmit(onSubmit)} data-testid="login-form">
         <h1 className="auth-card__title">Entrar</h1>
-        <p className="auth-card__subtitle">Acesse suas tarefas</p>
+        <p className="auth-card__subtitle">Acesse sua conta</p>
 
         {error ? (
           <div className="alert alert--error" role="alert" data-testid="login-error">
@@ -49,33 +47,43 @@ export function LoginPage() {
           <span>E-mail</span>
           <input
             type="email"
-            required
             autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            {...register('email')}
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? 'login-email-error' : undefined}
             data-testid="login-email"
           />
+          {errors.email ? (
+            <span id="login-email-error" className="field__error" role="alert">
+              {errors.email.message}
+            </span>
+          ) : null}
         </label>
 
         <label className="field">
           <span>Senha</span>
           <input
             type="password"
-            required
             autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            {...register('password')}
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? 'login-password-error' : undefined}
             data-testid="login-password"
           />
+          {errors.password ? (
+            <span id="login-password-error" className="field__error" role="alert">
+              {errors.password.message}
+            </span>
+          ) : null}
         </label>
 
         <button
           type="submit"
           className="btn btn--primary btn--block"
-          disabled={submitting}
+          disabled={isSubmitting}
           data-testid="login-submit"
         >
-          {submitting ? 'Entrando…' : 'Entrar'}
+          {isSubmitting ? 'Entrando…' : 'Entrar'}
         </button>
 
         <p className="auth-card__footer">

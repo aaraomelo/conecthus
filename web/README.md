@@ -9,6 +9,7 @@ Single-origin SPA for the Conecthus task manager. Built with **React 19**, **Vit
 | Build     | Vite 8 + TypeScript                            |
 | UI        | React 19 (functional components + hooks)       |
 | State     | Redux Toolkit (auth, tasks, notifications)     |
+| Validation | react-hook-form + zod (zodResolver)             |
 | Routing   | react-router-dom v7                            |
 | HTTP      | axios (base `/api`, JWT via interceptor)       |
 | Real-time | mqtt.js (WebSocket → `notifications/{userId}`) |

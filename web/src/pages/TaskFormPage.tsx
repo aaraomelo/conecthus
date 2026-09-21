@@ -1,18 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { createTask, getTask, updateTask } from '../api/tasks'
 import { getErrorMessage } from '../api/client'
 import { TASKS_CHANGED_EVENT } from '../mqtt/useNotifications'
-import type { CreateTaskInput, TaskFormValues, TaskStatus } from '../types'
-
-const EMPTY: TaskFormValues = { title: '', description: '', status: 'TODO', dueDate: '' }
-
-function toInput(values: TaskFormValues): CreateTaskInput {
-  const input: CreateTaskInput = { title: values.title.trim(), status: values.status }
-  if (values.description.trim()) input.description = values.description.trim()
-  if (values.dueDate) input.dueDate = values.dueDate
-  return input
-}
+import { createTaskSchema, type CreateTaskValues } from '../features/tasks/taskFormSchema'
+import type { TaskStatus } from '../types'
 
 export function TaskFormPage() {
   const { id } = useParams()
@@ -20,10 +14,20 @@ export function TaskFormPage() {
   const isEdit = Boolean(taskId)
   const navigate = useNavigate()
 
-  const [values, setValues] = useState<TaskFormValues>(EMPTY)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateTaskValues>({
+    resolver: zodResolver(createTaskSchema),
+    defaultValues: { title: '', description: '', status: 'TODO', dueDate: '' },
+    mode: 'onTouched',
+  })
 
   useEffect(() => {
     if (!taskId) return
@@ -32,12 +36,10 @@ export function TaskFormPage() {
       .then((response) => {
         if (!active) return
         const task = response.data
-        setValues({
-          title: task.title,
-          description: task.description ?? '',
-          status: task.status,
-          dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
-        })
+        setValue('title', task.title)
+        setValue('description', task.description ?? '')
+        setValue('status', task.status)
+        setValue('dueDate', task.dueDate ? task.dueDate.slice(0, 10) : '')
       })
       .catch((err) => {
         if (active) setError(getErrorMessage(err))
@@ -48,21 +50,20 @@ export function TaskFormPage() {
     return () => {
       active = false
     }
-  }, [taskId])
+  }, [taskId, setValue])
 
-  const patch = (partial: Partial<TaskFormValues>) =>
-    setValues((prev) => ({ ...prev, ...partial }))
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  const onSubmit = async (data: CreateTaskValues) => {
     setError(null)
     setSaving(true)
     try {
-      const input = toInput(values)
+      const input = {
+        title: data.title.trim(),
+        status: data.status ?? 'TODO',
+        ...(data.description !== undefined ? { description: data.description.trim() || undefined } : {}),
+        ...(data.dueDate ? { dueDate: data.dueDate } : {}),
+      }
       const saved = isEdit && taskId ? await updateTask(taskId, input) : await createTask(input)
-      window.dispatchEvent(
-        new CustomEvent(TASKS_CHANGED_EVENT, { detail: { taskId: saved.data.id } }),
-      )
+      window.dispatchEvent(new CustomEvent(TASKS_CHANGED_EVENT, { detail: { taskId: saved.data.id } }))
       navigate(isEdit && taskId ? `/tasks/${taskId}` : '/tasks', { replace: true })
     } catch (err) {
       setError(getErrorMessage(err))
@@ -88,7 +89,7 @@ export function TaskFormPage() {
         </Link>
       </div>
 
-      <form className="card form" onSubmit={handleSubmit} data-testid="task-form">
+      <form className="card form" onSubmit={handleSubmit(onSubmit)} data-testid="task-form">
         {error ? (
           <div className="alert alert--error" role="alert" data-testid="task-form-error">
             {error}
@@ -98,45 +99,68 @@ export function TaskFormPage() {
         <label className="field">
           <span>Título *</span>
           <input
-            required
-            value={values.title}
-            onChange={(event) => patch({ title: event.target.value })}
+            {...register('title')}
+            aria-invalid={!!errors.title}
+            aria-describedby={errors.title ? 'task-title-error' : undefined}
             data-testid="task-title"
           />
+          {errors.title ? (
+            <span id="task-title-error" className="field__error" role="alert">
+              {errors.title.message}
+            </span>
+          ) : null}
         </label>
 
         <label className="field">
           <span>Descrição</span>
           <textarea
             rows={4}
-            value={values.description}
-            onChange={(event) => patch({ description: event.target.value })}
+            {...register('description')}
+            aria-invalid={!!errors.description}
+            aria-describedby={errors.description ? 'task-description-error' : undefined}
             data-testid="task-description"
           />
+          {errors.description ? (
+            <span id="task-description-error" className="field__error" role="alert">
+              {errors.description.message}
+            </span>
+          ) : null}
         </label>
 
         <div className="form__row">
           <label className="field">
             <span>Status</span>
             <select
-              value={values.status}
-              onChange={(event) => patch({ status: event.target.value as TaskStatus })}
+              {...register('status')}
+              aria-invalid={!!errors.status}
+              aria-describedby={errors.status ? 'task-status-error' : undefined}
               data-testid="task-status"
             >
               <option value="TODO">A fazer</option>
               <option value="IN_PROGRESS">Em andamento</option>
               <option value="DONE">Concluída</option>
             </select>
+            {errors.status ? (
+              <span id="task-status-error" className="field__error" role="alert">
+                {errors.status.message}
+              </span>
+            ) : null}
           </label>
 
           <label className="field">
             <span>Vencimento</span>
             <input
               type="date"
-              value={values.dueDate}
-              onChange={(event) => patch({ dueDate: event.target.value })}
+              {...register('dueDate')}
+              aria-invalid={!!errors.dueDate}
+              aria-describedby={errors.dueDate ? 'task-due-date-error' : undefined}
               data-testid="task-due-date"
             />
+            {errors.dueDate ? (
+              <span id="task-due-date-error" className="field__error" role="alert">
+                {errors.dueDate.message}
+              </span>
+            ) : null}
           </label>
         </div>
 
@@ -144,10 +168,10 @@ export function TaskFormPage() {
           <button
             type="submit"
             className="btn btn--primary"
-            disabled={saving}
+            disabled={isSubmitting}
             data-testid="task-submit"
           >
-            {saving ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Criar tarefa'}
+            {isSubmitting ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Criar tarefa'}
           </button>
         </div>
       </form>

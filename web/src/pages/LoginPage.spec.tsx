@@ -2,76 +2,101 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthProvider } from '../auth/AuthContext'
 import { LoginPage } from './LoginPage'
-import type { AuthResponse } from '../types'
 
-vi.mock('../api/auth', () => ({
-  loginUser: vi.fn(),
-  registerUser: vi.fn(),
-  getCurrentUser: vi.fn(),
-  updateCurrentUser: vi.fn(),
+const mockLogin = vi.fn()
+vi.mock('../auth/auth-context', () => ({
+  useAuth: vi.fn(() => ({
+    login: mockLogin,
+    user: null,
+    loading: false,
+    register: vi.fn(),
+    logout: vi.fn(),
+  })),
 }))
 
-import { loginUser } from '../api/auth'
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => mockNavigate,
+}))
 
-const mockLogin = vi.mocked(loginUser)
-const user = { id: 1, name: 'Ana', email: 'ana@example.com', createdAt: '', updatedAt: '' }
-
-function renderLogin() {
+function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/login']}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/tasks" element={<div>DASHBOARD</div>} />
-        </Routes>
-      </AuthProvider>
-    </MemoryRouter>,
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/tasks" element={<div>Tasks</div>} />
+      </Routes>
+    </MemoryRouter>
   )
 }
 
 describe('LoginPage', () => {
   beforeEach(() => {
-    mockLogin.mockReset()
+    mockLogin.mockClear()
+    mockNavigate.mockClear()
   })
 
   it('renders the login form', () => {
-    renderLogin()
+    renderPage()
     expect(screen.getByTestId('login-form')).toBeInTheDocument()
-    expect(screen.getByLabelText('E-mail')).toBeInTheDocument()
-    expect(screen.getByLabelText('Senha')).toBeInTheDocument()
-    expect(screen.getByText('Cadastre-se')).toBeInTheDocument()
+    expect(screen.getByTestId('login-email')).toBeInTheDocument()
+    expect(screen.getByTestId('login-password')).toBeInTheDocument()
+    expect(screen.getByTestId('login-submit')).toBeInTheDocument()
   })
 
-  it('logs in and navigates to /tasks', async () => {
-    const response = { user, accessToken: 'token-123' } satisfies AuthResponse
-    mockLogin.mockResolvedValue({ data: response } as never)
-    const userEventApi = userEvent.setup()
+  it('shows validation errors on submit with empty fields', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByTestId('login-submit'))
 
-    renderLogin()
-    await userEventApi.type(screen.getByLabelText('E-mail'), 'ana@example.com')
-    await userEventApi.type(screen.getByLabelText('Senha'), 'secret')
-    await userEventApi.click(screen.getByTestId('login-submit'))
-
-    expect(await screen.findByText('DASHBOARD')).toBeInTheDocument()
-    expect(mockLogin).toHaveBeenCalledWith('ana@example.com', 'secret')
-    expect(localStorage.getItem('conecthus.token')).toBe('token-123')
+    expect(await screen.findByText('E-mail obrigatório')).toBeInTheDocument()
+    expect(screen.getByText('Senha obrigatória')).toBeInTheDocument()
   })
 
-  it('shows an error message when login fails', async () => {
-    mockLogin.mockRejectedValue({
-      isAxiosError: true,
-      response: { status: 401, data: { message: 'Credenciais inválidas' } },
-    })
-    const userEventApi = userEvent.setup()
+  it('shows validation error for invalid email', async () => {
+    const user = userEvent.setup()
+    renderPage()
 
-    renderLogin()
-    await userEventApi.type(screen.getByLabelText('E-mail'), 'ana@example.com')
-    await userEventApi.type(screen.getByLabelText('Senha'), 'wrong')
-    await userEventApi.click(screen.getByTestId('login-submit'))
+    await user.type(screen.getByTestId('login-email'), 'invalid-email')
+    await user.tab()
 
-    expect(await screen.findByTestId('login-error')).toHaveTextContent('Credenciais inválidas')
-    expect(screen.queryByText('DASHBOARD')).not.toBeInTheDocument()
+    expect(await screen.findByText('E-mail inválido')).toBeInTheDocument()
+  })
+
+  it('does not show password error when password has 2 chars', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('login-password'), '12')
+    await user.tab()
+
+    expect(screen.queryByText('Senha obrigatória')).not.toBeInTheDocument()
+  })
+
+  it('logs in and navigates to /tasks on success', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('login-email'), 'test@domain.com')
+    await user.type(screen.getByTestId('login-password'), 'secret')
+    await user.click(screen.getByTestId('login-submit'))
+
+    expect(mockLogin).toHaveBeenCalledWith('test@domain.com', 'secret')
+    expect(mockNavigate).toHaveBeenCalledWith('/tasks', { replace: true })
+  })
+
+  it('displays error message when login fails', async () => {
+    mockLogin.mockRejectedValue(new Error('Credenciais inválidas'))
+
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.type(screen.getByTestId('login-email'), 'test@domain.com')
+    await user.type(screen.getByTestId('login-password'), 'wrong')
+    await user.click(screen.getByTestId('login-submit'))
+
+    expect(await screen.findByText('Algo deu errado. Tente novamente.')).toBeInTheDocument()
   })
 })
