@@ -1,0 +1,228 @@
+% =====================================================================
+% Conecthus - Entrega do Teste Técnico (Instituto Conecthus)
+% Author: Arao Melo Lopes - 21/09/2026
+% Compilar: pdflatex conecthus_entrega.tex
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue]{hyperref}
+\usepackage{xcolor}
+\usepackage{parskip}
+
+\setlength{\parindent}{0pt}
+\urlstyle{same}
+
+\begin{document}
+
+% ---------------------------------------------------------------------
+% CAPA
+% ---------------------------------------------------------------------
+\begin{titlepage}
+  \centering
+  {\LARGE\bfseries Conecthus --- Task Manager\par}
+  \vspace{1.2cm}
+  {\large Teste Técnico\par}
+  \vspace{0.3cm}
+  {\large Instituto Conecthus\par}
+  \vspace{1.5cm}
+  {\large Aarão Melo Lopes\par}
+  \vspace{4cm}
+
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Data da entrega & 21 de setembro de 2026 \\[3pt]
+    Repositório & \url{https://github.com/aaraomelo/conecthus} \\[3pt]
+    Aplicação Web & \url{https://conecthus.patriatechnology.com} \\[3pt]
+    Swagger (API) & \url{https://conecthus.patriatechnology.com/api/docs} \\
+    \bottomrule
+  \end{tabular}
+
+  \vfill
+  {\footnotesize Documento de entrega --- aplicação, testes e publicação.}
+\end{titlepage}
+
+% ---------------------------------------------------------------------
+% 1. RESUMO DA SOLUCAO
+% ---------------------------------------------------------------------
+\section{Resumo da solução}
+
+O \textbf{Conecthus} é um gerenciador de tarefas full-stack (CRUD) com autenticação
+JWT, validação no cliente e no servidor, cache, busca textual e notificações em
+tempo real via MQTT. A aplicação é entregue como uma única origem (\emph{single-origin}):
+a SPA Web, servida por nginx, faz proxy de \texttt{/api} (REST) e \texttt{/mqtt}
+(WebSocket) para o backend e o broker MQTT.
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Web:} React 19 + Vite + TypeScript + Redux Toolkit, responsivo, com
+        React Hook Form + Zod para validação de formulários.
+  \item \textbf{Backend:} NestJS (API REST) + Prisma sobre PostgreSQL, Redis para cache,
+        MQTT para notificações e Swagger para documentação da API.
+  \item \textbf{Mobile:} React Native (Expo SDK 57), consumindo a mesma API e os
+        mesmos tópicos MQTT.
+  \item \textbf{Infraestrutura:} Docker Compose (PostgreSQL 16, Redis 7, Mosquitto 2.0.18,
+        backend, frontend), com healthchecks e deploy contínuo via GitHub Actions.
+\end{itemize}
+
+% ---------------------------------------------------------------------
+% 2. STACK
+% ---------------------------------------------------------------------
+\section{Stack}
+
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+  \toprule
+  \textbf{Componente} & \textbf{Tecnologias} \\
+  \midrule
+  Web
+    & React 19, Vite 8, TypeScript, Redux Toolkit, React Router 7,
+      React Hook Form + Zod (validação), MQTT.js; testes com Vitest + Testing Library,
+      lint com oxlint \\
+  Backend
+    & NestJS 12, Prisma 7, class-validator (ValidationPipe), JWT
+      (@nestjs/jwt), Swagger (@nestjs/swagger), cache-manager + ioredis, mqtt.js \\
+  Banco de dados & PostgreSQL 16 com Prisma 7 (schema + migrations) \\
+  Cache & Redis 7 (TTL 60s; invalidação por usuário após mutações) \\
+  Mensageria & Eclipse Mosquitto 2.0.18 --- notificações em tempo real
+      em \texttt{notifications/\{userId\}} (MQTT 1883; WebSocket 8083) \\
+  Mobile & React Native 0.86 + Expo SDK 57, React Navigation, axios,
+      AsyncStorage, MQTT via WebSocket; testes com jest-expo \\
+  Infraestrutura & Docker Compose (Postgres, Redis, Mosquitto, backend, frontend/nginx);
+      deploy contínuo no GitHub Actions \\
+  \bottomrule
+\end{tabularx}
+
+% ---------------------------------------------------------------------
+% 3. FUNCIONALIDADES IMPLEMENTADAS
+% ---------------------------------------------------------------------
+\section{Funcionalidades implementadas}
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Autenticação:} cadastro e login com JWT (senha com bcrypt);
+        guard global no backend com opt-out apenas em \texttt{auth/*}.
+  \item \textbf{Proteção de rotas:} rotas privadas/públicas na Web
+        (\texttt{ProtectedRoute}/\texttt{GuestRoute}) e navegação condicional no Mobile.
+  \item \textbf{CRUD de tarefas:} criar, listar, ver, editar, concluir e excluir,
+        via REST + Prisma, com isolamento por usuário (\texttt{userId} no \texttt{WHERE}).
+  \item \textbf{Filtros:} por \texttt{status} e período (\texttt{dueDate}).
+  \item \textbf{Paginação:} cursor/offset com parâmetros \texttt{page}/\texttt{pageSize}.
+  \item \textbf{Busca:} textual em \texttt{title}/\texttt{description} via
+        \texttt{ILIKE} (decisão documentada no repositório).
+  \item \textbf{Cache Redis:} listas e perfis com TTL 60s e invalidação
+        por usuário após qualquer mutação.
+  \item \textbf{MQTT:} notificações em tempo real em \texttt{notifications/\{userId\}},
+        consumidas na Web (toasts) e no Mobile (overlay).
+  \item \textbf{Web:} SPA responsiva com formulários validados (React Hook Form + Zod).
+  \item \textbf{Mobile:} Expo SDK 57 --- telas de autenticação, lista de tarefas com
+        filtros/busca/paginação e notificações.
+  \item \textbf{Swagger:} documentação da API em \texttt{GET /api/docs}.
+  \item \textbf{Docker:} ambiente completo com \texttt{docker compose up --build -d}
+        e healthchecks para todos os serviços.
+\end{itemize}
+
+% ---------------------------------------------------------------------
+% 4. QUALIDADE E TESTES
+% ---------------------------------------------------------------------
+\section{Qualidade e testes}
+
+\begin{tabularx}{\linewidth}{@{}l l >{\raggedright\arraybackslash}X@{}}
+  \toprule
+  \textbf{Item} & \textbf{Resultado} & \textbf{Observação} \\
+  \midrule
+  Testes unitários Web (Vitest) & 77/77 aprovados
+    & 12 arquivos de teste; inclui \texttt{TaskFormPage} 3/3 \\
+  Testes unitários Backend (Vitest) & 26/26 aprovados
+    & 6 arquivos de teste \\
+  Testes com \texttt{skip}/\texttt{only}/\texttt{todo} & Nenhum
+    & Verificado por varredura no código-fonte \\
+  Lint oxlint --- Web & 0 erros; 0 warnings
+    & \texttt{npm run lint} \\
+  Lint oxlint --- Backend & 0 erros; 0 warnings
+    & \texttt{npm run lint} \\
+  Build Web & OK (passa no CI)
+    & \texttt{tsc -b \&\& vite build} \\
+  Build Backend & OK (passa no CI)
+    & \texttt{nest build} \\
+  Cobertura & Thresholds 70\% configurados (Web e Mobile)
+    & Configuração de threshold; não é medição desta entrega \\
+  Integração (e2e) & 11 casos no repositório
+    & 11 casos (auth, CRUD, cache, MQTT e ownership);
+      execução via \texttt{npm run test:e2e} (requer infra Docker) \\
+  \bottomrule
+\end{tabularx}
+
+\medskip
+\emph{Nota transparente:} o pipeline do GitHub Actions \textbf{valida builds} (backend e
+frontend) e \texttt{docker compose config}, mas \textbf{não executa as suítes de teste};
+esses números refletem a execução local documentada acima.
+
+% ---------------------------------------------------------------------
+% 5. PUBLICACAO
+% ---------------------------------------------------------------------
+\section{Publicação}
+
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+  \toprule
+  \textbf{Item} & \textbf{Estado} \\
+  \midrule
+  Aplicação Web & \url{https://conecthus.patriatechnology.com} --- HTTP 200
+    (cadastro e login auto-atendidos; crie uma conta na primeira visita) \\
+  Swagger público & \url{https://conecthus.patriatechnology.com/api/docs} --- HTTP 200 \\
+  API pública & \texttt{/api/*} responde no domínio público
+    (sem token, \texttt{/api/tasks} retorna 401) \\
+  MQTT público (WebSocket) & \texttt{wss://conecthus.patriatechnology.com/mqtt}
+    (notificações em tempo real) \\
+  Docker & Serviços publicados via Docker Compose no servidor de produção \\
+  Deploy & GitHub Actions (push para \texttt{main}) com deploy SSH +
+    \texttt{docker compose up}; deploy mais recente \textbf{concluído com sucesso}
+    (validação de \texttt{/api/docs} e smoke test HTTP 200 no frontend) \\
+  \bottomrule
+\end{tabularx}
+
+\medskip
+\textbf{Para o avaliador:} acessar a aplicação, criar uma conta e usar o fluxo
+completo (criar, editar, concluir e excluir tarefas, aplicar filtros e busca). Não há
+credenciais de demonstração públicas; o cadastro é livre.
+
+% ---------------------------------------------------------------------
+% 6. HISTORICO TECNICO
+% ---------------------------------------------------------------------
+\section{Histórico técnico (commits finais)}
+
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+  \toprule
+  \textbf{Commit} & \textbf{Mensagem} \\
+  \midrule
+  \texttt{c534915} & \texttt{docs: document text search decision} \\
+  \texttt{791929c} & \texttt{fix(mqtt): pin mosquitto to websocket-compatible version} \\
+  \texttt{7e99df8} & \texttt{feat(web): migrate auth and task forms to react-hook-form + zod} \\
+  \bottomrule
+\end{tabularx}
+
+\smallskip
+\emph{Nota:} na sequência foi publicado o commit \texttt{a4c7243}
+(correção de build detectada pela CI --- tipagem de formulário e código morto),
+com novo deploy validado com sucesso.
+
+% ---------------------------------------------------------------------
+% 7. SUGESTAO DE SCREENSHOTS
+% ---------------------------------------------------------------------
+\section{Screenshots sugeridos para a apresentação}
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
+  \item Tela de login e de cadastro com validação de campos (mensagens de erro).
+  \item Lista de tarefas com filtros (status/período), busca e paginação.
+  \item Formulário de criação/edição de tarefa com validação.
+  \item Notificação em tempo real ao criar ou concluir uma tarefa.
+  \item Swagger público (\texttt{/api/docs}) exibindo os endpoints documentados.
+  \item Terminal com o resumo dos testes: Web 77/77 e Backend 26/26.
+  \item Status do deploy mais recente no GitHub Actions (run concluída com sucesso).
+\end{enumerate}
+
+\end{document}
